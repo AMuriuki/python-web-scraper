@@ -8,6 +8,12 @@ def open_page(argv):
     html_bytes = page.read()
     html = html_bytes.decode("utf-8")
     print(html)
+    find_title_index(html)
+
+
+def find_title_index(html):
+    title_index = html.find("<title>")
+    print (title_index)
 
 
 if __name__ == "__main__":

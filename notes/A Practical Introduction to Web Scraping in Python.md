@@ -137,3 +137,49 @@ Now we have our HTML, so how then do we extract text from it.
 <br><br>
 
 ## Extract text from HTML with string methods
+Another set of built in tools that will come in handy are python's string methods. This are methods that manipulate string values. For example:
+
+* capitalize() - Converts the first character of a string to upper case
+* casefold() - Converts a string into lower case
+* center() - Returns a centered string.
+
+There are a number of string methods. You can learn of them all here [String Methods](https://docs.python.org/2.5/lib/string-methods.html)
+
+For our case, let's say we want to extract the title of the page which from our example is `Profile: Aphrodite`, we will first determine the index of the first character of the opening `<title>` tag of the page and the first character of the closing `</title>` tag, then use a string slicing to extract the title.
+
+`.find()` method returns the index of the first occurrence of a substring, we'll use it to get the index of the opening `<title>` tag by passing the `"<title>"` to `.find()`:
+
+```
+>>> title_index = html.find("<title>")
+>>> title_index
+14
+```
+
+Below i have updated script.py with the above commands:
+
+```
+import sys
+
+from urllib.request import urlopen
+
+
+def open_page(argv):
+    page = urlopen(sys.argv[1])
+    html_bytes = page.read()
+    html = html_bytes.decode("utf-8")
+    print(html)
+    find_title_index(html)
+
+
+def find_title_index(html):
+    title_index = html.find("<title>")
+    print (title_index)
+
+
+if __name__ == "__main__":
+    open_page(sys.argv[1])
+```
+
+The method find_title_index(html) is being called by the open_page(argv) method, which is the main method of the program after extracting html.
+
+After extracting the html from the given url the open_page(argv) method calls the find_title_index(html) method and pass the html object to it. Which then prints out the index of the starting character of the `<title>` tag.
