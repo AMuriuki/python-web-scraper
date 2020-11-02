@@ -1,13 +1,13 @@
 # A Practical Introduction to Web Scraping in Python
 ## Introduction
-Let's start by describing what **web scraping** is. If you are a student, researcher, data scientist or if you would want to traverse through large amounts of data on a website or websites then scraping would make the job easier compared to manually going through each website and getting the data you are looking for. Scraping is the process where a program automatically collects data from websites. In this post I'll be looking at how to:
+Let's start by describing what **web scraping** is. If you are a student, researcher, data scientist or if you would want to traverse through large amounts of data on a website or websites then web scraping would solve the challenge of manually browsing each website to get the data you are looking for. Scraping is the process where a program automatically collects data from websites. In this post I'll be looking at how to:
 
 * Automatically break up content that's on a website into separate components.
 
 ## Scrape and Parse Text From Websites
-You now have an idea of what scraping is. What do we mean by *parsing text from a website*? First, you need to understand how data on webpage is structured.  
+What do we mean by *parsing text from a website*? First, let's get to understand how data on a webpage is structured.  
 
-A web page (or webpage) is a document that's written using HTML, which stands for Hyper Text Markup Language. Here is an example of a simple HTML document
+A web page (or webpage) is a document that's written using HTML (Hyper Text Markup Language). Below is an example of a simple HTML document
 
 ```
 <!DOCTYPE html>
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     open_page(sys.argv[1])
 ```
 
-When we run the above script on a terminal
+When we run the above script on a terminal (we are passing "http://olympus.realpython.org/profiles/aphrodite" as the url to open) 
 
 ```
 $ python script.py "http://olympus.realpython.org/profiles/aphrodite"
@@ -137,7 +137,7 @@ Now we have our HTML, so how then do we extract text from it.
 <br><br>
 
 ## Extract text from HTML with string methods
-Another set of built in tools that will come in handy are python's string methods. This are methods that manipulate string values. For example:
+Another set of built in tools that will come in handy are python's string methods. These are methods that manipulate string values. For example:
 
 * capitalize() - Converts the first character of a string to upper case
 * casefold() - Converts a string into lower case
@@ -145,16 +145,38 @@ Another set of built in tools that will come in handy are python's string method
 
 There are a number of string methods. You can learn of them all here [String Methods](https://docs.python.org/2.5/lib/string-methods.html)
 
-For our case, let's say we want to extract the title of the page which from our example is `Profile: Aphrodite`, we will first determine the index of the first character of the opening `<title>` tag of the page and the first character of the closing `</title>` tag, then use a string slicing to extract the title.
+For our case, let's say we want to extract the title of the page which from our example is `Profile: Aphrodite`, we will first determine the index of the first character of the opening `<title>` tag of the page and the first character of the closing `</title>` tag, then use string slicing to extract the title.
 
 `.find()` method returns the index of the first occurrence of a substring, we'll use it to get the index of the opening `<title>` tag by passing the `"<title>"` to `.find()`:
 
 ```
->>> title_index = html.find("<title>")
->>> title_index
+>>> title_tag_start_index = html.find("<title>")
+>>> title_tag_start_index
 14
 ```
 
+We don't want the index of the `<title>` tag instead what we want is the index of the title itself. To get that (index of the first letter in the title), we add the length of the string `"<title>"` to the value of title_tag_start_index:
+
+```
+>>> title_text_start_index = title_tag_start_index + len("<title>")
+>>> title_text_start_index
+21
+```
+
+Next, let's get the index of the closing `</title>` tag by passing the string `"</title>"` to `.find()`:
+
+```
+>>> title_text_end_index = html.find("</title>")
+>>> title_text_end_index
+39
+```
+
+Finally, we can now extract the title by slicing the `html` string:
+```
+>>> title = html[title_text_start_index:title_text_end_index]
+>>> title
+'Profile: Aphrodite'
+```
 Below i have updated script.py with the above commands:
 
 ```
@@ -167,19 +189,21 @@ def open_page(argv):
     page = urlopen(sys.argv[1])
     html_bytes = page.read()
     html = html_bytes.decode("utf-8")
-    print(html)
-    find_title_index(html)
+    print(type(html))
+    find_title(html)
 
 
-def find_title_index(html):
-    title_index = html.find("<title>")
-    print (title_index)
+def find_title(html):
+    title_tag_start_index = html.find("<title>")
+    title_text_start_index = title_tag_start_index + len("<title>")
+    title_text_end_index = html.find("</title>")
+    title = html[title_text_start_index:title_text_end_index]
+    print(title)
 
 
 if __name__ == "__main__":
     open_page(sys.argv[1])
 ```
 
-The method find_title_index(html) is being called by the open_page(argv) method, which is the main method of the program after extracting html.
+After extracting the html from the given url the `open_page(argv)` method calls the `find_title(html)` method and pass the html object to it. Which then prints out the index of the starting character of the `<title>` tag.
 
-After extracting the html from the given url the open_page(argv) method calls the find_title_index(html) method and pass the html object to it. Which then prints out the index of the starting character of the `<title>` tag.
