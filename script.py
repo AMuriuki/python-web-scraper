@@ -356,6 +356,9 @@ def vehicle_part(make_id, model_id, path_to_parts, vehiclesystem_id, vehiclesubs
     url = "https://partsouq.com"+path_to_parts
     page = requests.get(url)
     soup = BeautifulSoup(page.content, 'html.parser')
+    part_title = soup.find_all("div", class_='col-lg-12')[1]
+    print(part_title.text.strip())
+
 
 
 @manager.command

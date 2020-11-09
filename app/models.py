@@ -82,20 +82,22 @@ class Vehicle3rdlevelsubsystem(db.Model):
     subsystem_id = db.Column(db.Integer, db.ForeignKey('vehiclesubsystem.id'))
     secondlevel_subsystem_id = db.Column(db.Integer, db.ForeignKey('vehiclesecondlevelsubsystem.id'))
     parts = db.relationship('Vehiclepart', backref='vehicle3rdlevelsubsystem.id', lazy='dynamic')
-
-# class Vehiclepartcategory(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     system = db.Column(db.String(64), index=True)
-#     category = db.Column(db.String(64), index=True)
-#     subcategory = db.Column(db.String(64), index=True)
-#     _subcategory = db.Column(db.String(64), index=True)
-#     parts = db.relationship('Vehiclepart', backref='vehiclepartcategory.id', lazy='dynamic')
     
 
 class Vehiclepart(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    part_category = db.Column(db.String(64), index=True)
+    part_subcategory = db.Column(db.String(64), index=True)
     part_number = db.Column(db.String(64), index=True)
     part_name = db.Column(db.String(64), index=True)
+    part_code = db.Column(db.String(64), index=True)
+    part_required = db.Column(db.String(64), index=True)
+    note = db.Column(db.String(64), index=True)
+    manufacturer_note = db.Column(db.String(64), index=True)
+    end_of_production = db.Column(db.String(64), index=True)
+    comment = db.Column(db.String(64), index=True)
+    assosciated_parts = db.Column(db.String(64), index=True)
+    path_to_cost = db.Column(db.Text(), index=True)
     cost = db.Column(db.String(64), index=True)
     system_id = db.Column(db.Integer, db.ForeignKey('vehiclesystem.id'))
     subsystem_id = db.Column(db.Integer, db.ForeignKey('vehiclesubsystem.id'))
