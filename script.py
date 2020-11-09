@@ -3,7 +3,7 @@ import requests
 from app import app, db
 from flask_script import Manager
 from bs4 import BeautifulSoup
-from app.models import Vehiclemodel, Vehiclemake, Vehiclespecification, Vehiclesystem, Vehiclesubsystem, Vehiclesecondlevelsubsystem, Vehicle3rdlevelsubsystem
+from app.models import Vehiclemodel, Vehiclemake, Vehiclespecification, Vehiclesystem, Vehiclesubsystem, Vehiclesecondlevelsubsystem, Vehicle3rdlevelsubsystem, Vehiclepart
 
 manager = Manager(app)
 
@@ -72,7 +72,7 @@ def vehicle_specification(path, make_id, model_id):
         cols = row.find_all('td')
         anchor = row.find("a")
         cols = [ele.text.strip() for ele in cols]
-        records.append(cols) # Get rid of empty values
+        records.append(cols) 
     
     headers = list(filter(None, headers)) #Get rid of empty lists
     records = list(filter(None, records)) #Get rid of empty lists
@@ -356,10 +356,163 @@ def vehicle_part(make_id, model_id, path_to_parts, vehiclesystem_id, vehiclesubs
     url = "https://partsouq.com"+path_to_parts
     page = requests.get(url)
     soup = BeautifulSoup(page.content, 'html.parser')
-    part_title = soup.find_all("div", class_='col-lg-12')[1]
-    print(part_title.text.strip())
+    part_category = soup.find_all("div", class_='col-lg-12')[1]
+    part_subcategory = soup.find("div", class_='col-xs-8 unit-header')
+    table = soup.find('table', class_='glow pop-vin table table-bordered-1 table-hover table-condensed')
+    rows = table.findAll('tr')
+    headers = []
+    records = []
+    links = []
+    for row in rows:
+        ths = row.find_all('th')
+        for th in ths:
+            if th:
+                headers.append(th.text.strip())
+        cols = row.find_all('td')
+        anchor = row.find("a")
+        if anchor:
+            links.append(anchor['href'])
+        _rows = [ele.text.strip() for ele in cols] 
+        records.append(_rows)
+    
+    links = list(filter(None, links)) #Get rid of empty lists
+    headers = list(filter(None, headers)) #Get rid of empty lists
+    records = list(filter(None, records)) #Get rid of empty lists
 
 
+    for record, link in zip(records, links):
+        number_index = [idx for idx, element in enumerate(headers) if element == "Number"]
+
+        name_index = [idx for idx, element in enumerate(headers) if element == "Name"]
+
+        code_index = [idx for idx, element in enumerate(headers) if element == 
+        "Code"]
+
+        qty_required_index = [idx for idx, element in enumerate(headers) if element == 
+        "Qty Required"]
+
+        note_index = [idx for idx, element in enumerate(headers) if element == 
+        "Note"]
+
+        manufacturer_note_index = [idx for idx, element in enumerate(headers) if element == 
+        "Manufacturer_note"]
+
+        end_of_production_index = [idx for idx, element in enumerate(headers) if element == 
+        "End_of_production"]
+
+        series_description_index = [idx for idx, element in enumerate(headers) if element == 
+        "Series Description"]
+
+        comment1_index = [idx for idx, element in enumerate(headers) if element == 
+        "Comment1"]
+
+        associated_parts_index = [idx for idx, element in enumerate(headers) if element == 
+        "Associated_parts"]  
+
+        if number_index:
+            for _number_index in number_index:
+                number_index = int(_number_index)
+                try:
+                    number = record[number_index]
+                except:
+                    number = ""                
+        else:
+            number = ""
+
+        if name_index:
+            for _name_index in name_index:
+                name_index = int(_name_index)
+                try:
+                    name = record[name_index]
+                except:
+                    name_index = ""
+                
+        else:
+            name_index = ""
+
+        if code_index:
+            for _code_index in code_index:
+                code_index = int(_code_index)
+                try:
+                    code = record[code_index]
+                except:
+                    code = ""
+                
+        else:
+            code = ""
+
+        if qty_required_index:
+            for _qty_required_index in qty_required_index:
+                qty_required_index = int(_qty_required_index)
+                try:
+                    qty_required = record[qty_required_index]
+                except:
+                    qty_required = ""
+                
+        else:
+            qty_required = ""
+
+        if note_index:
+            for _note_index in note_index:
+                note_index = int(_note_index)
+                try:
+                    note = record[note_index]
+                except:
+                    note = ""
+                
+        else:
+            note = ""
+
+        if manufacturer_note_index:
+            for _manufacturer_note_index in manufacturer_note_index:
+                manufacturer_note_index = int(_manufacturer_note_index)
+                try:
+                    manufacturer_note = record[manufacturer_note_index]
+                except:
+                    manufacturer_note = ""
+                
+        else:
+            manufacturer_note = ""
+
+        if end_of_production_index:
+            for _end_of_production_index in end_of_production_index:
+                end_of_production_index = int(_end_of_production_index)
+                try:
+                    end_of_production = record[end_of_production_index]
+                except:
+                    end_of_production = ""
+                
+        else:
+            end_of_production = ""
+            
+        if comment1_index:
+            for _comment1_index in comment1_index:
+                comment1_index = int(_comment1_index)
+                try:
+                    comment1 = record[comment1_index] 
+                except:
+                    comment1 = ""
+                
+        else:
+            comment1 = ""  
+
+        if associated_parts_index:
+            for _associated_parts_index in associated_parts_index:
+                associated_parts_index = int(_associated_parts_index)
+                try:
+                    associated_parts = record[associated_parts_index] 
+                except:
+                    associated_parts = ""
+                
+        else:
+            associated_parts = ""  
+
+        vehiclepart = Vehiclepart(part_category=part_category.text.strip(), part_subcategory=part_subcategory.text.strip(), part_number=number, part_name=name, part_code=code, qty_required=qty_required, note=note, manufacturer_note=note, end_of_production=end_of_production, comment=comment1, associated_parts=associated_parts, path_to_cost=link, system_id=vehiclesystem_id, subsystem_id=vehiclesubsystem_id, secondlevel_subsystem_id=vehiclesecondlevelsubsystem_id, thirdlevel_subsystem_id=vehicle3rdlevelsubsystem_id, model_id=model_id, make_id=make_id)  
+
+        db.session.add(vehiclepart)
+        db.session.commit()
+    
+    
 
 @manager.command
 def vehicle_2ndlevel_subsystem(vehiclesystem_id ,vehiclesubsystem_id, parentclass, make_id, model_id, soup):
