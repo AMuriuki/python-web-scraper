@@ -335,7 +335,7 @@ def get_link_to_systems(path):
 
 @manager.command
 def vehicle_system():
-    specifications = db.session.query(Vehiclespecification).filter(id > 16504).all()
+    specifications = db.session.query(Vehiclespecification).filter(Vehiclespecification.id > 16504).all()
     print(len(specifications))
     for specification in specifications:
         make = db.session.query(Vehiclemake).join(Vehiclespecification).filter(Vehiclemake.id == specification.make_id).first()
