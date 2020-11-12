@@ -4,7 +4,7 @@ import time
 from app import app, db
 from flask_script import Manager
 from bs4 import BeautifulSoup
-from app.models import Vehiclemodel, Vehiclemake, Vehiclespecification, Vehiclesystem, Vehiclesubsystem, Vehiclesecondlevelsubsystem, Vehicle3rdlevelsubsystem, Vehiclepart
+from app.models import Vehiclemodel, Vehiclemake, Vehiclespecification, Vehiclepart, Vehiclesystemparts, Vehiclesystemdetails
 
 manager = Manager(app)
 
@@ -99,21 +99,29 @@ def vehicle_specification():
         rows = table.findAll('tr')
         headers = []
         records = []
+        links = []
         for row in rows:
             ths = row.find_all('th')
             for th in ths:
                 if th:
                     headers.append(th.text.strip())
             cols = row.find_all('td')
-            anchor = row.find("a")
+            if cols:
+                link = cols[1].find("a").get('href')
+                links.append(link)            
             cols = [ele.text.strip() for ele in cols]
             records.append(cols)
 
         headers = list(filter(None, headers)) #Get rid of empty lists
         records = list(filter(None, records)) #Get rid of empty lists
+        links = list(filter(None, links)) #Get rid of empty lists
+        
+        if len(records) == len(links):
+            print("Number of links is equal to number of records")
+        else:
+            raise Exception("Number of links not equal to number of records")
 
-
-        for record in records:
+        for record, link in zip(records, links):
             name_index = [idx for idx, element in enumerate(headers) if element == "Name"]
 
             model_index = [idx for idx, element in enumerate(headers) if element == "Model"]
@@ -291,8 +299,10 @@ def vehicle_specification():
             else:
                 year = ""
 
-
-            vehiclespecification = Vehiclespecification(name=name, year=year, destination_region=destination_region, engine=engine, model=_model, steering=steering, model_id=model.id, make_id=make.id, transmission=transmission, body_style=body_style, series_description=series_description, model_year_from=model_year_from, model_year_to=model_year_to, market=market, grade=grade, path_to_partscatalog=anchor['href'])
+            print("Getting link to parts catalog for " + make.name + " " + model.name + " " + str(model.series_code))
+            link = get_link_to_systems(link)
+            
+            vehiclespecification = Vehiclespecification(name=name, year=year, destination_region=destination_region, engine=engine, model=_model, steering=steering, model_id=model.id, make_id=make.id, transmission=transmission, body_style=body_style, series_description=series_description, model_year_from=model_year_from, model_year_to=model_year_to, market=market, grade=grade, path_to_partscatalog=link)
 
             db.session.add(vehiclespecification)
             db.session.commit()
@@ -301,7 +311,8 @@ def vehicle_specification():
         time.sleep(3)
 
     specifications = db.session.query(Vehiclespecification).all()
-    print(str(len(specifications)) + " records of vehicle specifications posted to DB")
+    print(str(len(specifications)) + " vehicle specifications posted to DB")
+    vehicle_systems()
 
 
 def stringoperation(stringvalue):
@@ -313,7 +324,6 @@ def get_link_to_systems(path):
     url = "https://partsouq.com"+path
     while True:
         try:
-            print("Connecting to " + url)
             page = requests.get(url)
         except requests.exceptions.ConnectionError:           
             continue
@@ -334,16 +344,14 @@ def get_link_to_systems(path):
 
 
 @manager.command
-def vehicle_system():
-    specifications = db.session.query(Vehiclespecification).filter(Vehiclespecification.id > 16504).all()
-    print(len(specifications))
-    for specification in specifications:
-        make = db.session.query(Vehiclemake).join(Vehiclespecification).filter(Vehiclemake.id == specification.make_id).first()
-        model = db.session.query(Vehiclemodel).join(Vehiclespecification).filter(Vehiclemodel.id == specification.model_id).first()
-        link = get_link_to_systems(specification.path_to_partscatalog)
-        print ("Fetching vehicle part systems for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description)
-        url = "https://partsouq.com"+link
-        
+def vehicle_systems():
+    vehiclesystemparts = db.session.query(Vehiclesystemparts).all()
+    
+    if vehiclesystemparts:
+        pass
+    else:
+        url = "https://partsouq.com/en/catalog/genuine/groups?c=BMW&ssd=%24%2AKwFiVkdEP2MXET5ge2R8UjouDgkXZmlkZXdxfjg4NTs1ES12ZG5_cnFsd3JkZ2U_MTl8cXQjM3N2biklThFgZ3UtAAAAAIq75YA%24&vid=331494080&cid=&q="
+
         while True:
             try:
                 print("Connecting to " + url)
@@ -352,12 +360,13 @@ def vehicle_system():
                 continue
             except requests.exceptions.ChunkedEncodingError:
                 continue
-            break
+            break 
+
         soup = BeautifulSoup(page.content, 'html.parser')
         table = soup.find('table', class_='table-mage group-main1 table table-bordered-1 table-stripped tree')
         rows = table.findAll('tr', class_=True)
         parent_classes = []
-        child_classes = []
+        
         for row in rows:
             if len(row.attrs['class']) == 1:
                 parent_classes.append(row.attrs['class'])
@@ -372,334 +381,261 @@ def vehicle_system():
             table_row = table.find('tr', class_=_parent_class)
             table_col = table_row.find('td')
 
-            vehiclesystem = Vehiclesystem(system=table_col.text.strip(), class_element=_parent_class, make_id=make.id, model_id=model.id, url=url, specification_id = specification.id)
-
-            db.session.add(vehiclesystem)
+            vehiclesystemparts = Vehiclesystemparts(system=table_col.text.strip(), class_element=_parent_class)
+            db.session.add(vehiclesystemparts)
             
             print("System - "+ table_col.text.strip() +" added")
         db.session.commit()
 
-
-    systems = db.session.query(Vehiclesystem).all()
+    systems = db.session.query(Vehiclesystemparts).all()
     print(str(len(systems)) + " systems posted to DB" )
-    vehicle_subsystem()
+    vehicle_systemdetails()
 
 
 @manager.command
-def vehicle_subsystem():
-    vehiclepart_systems = db.session.query(Vehiclesystem).all()
-    for vehiclepart_system in vehiclepart_systems:
-        make = db.session.query(Vehiclemake).join(Vehiclesystem).filter(Vehiclemake.id == vehiclepart_system.make_id).first()
-        model = db.session.query(Vehiclemodel).join(Vehiclesystem).filter(Vehiclemodel.id == vehiclepart_system.model_id).first()
-        specification = db.session.query(Vehiclespecification).join(Vehiclesystem).filter(Vehiclespecification.id == vehiclepart_system.specification_id).first()
-        
+def vehicle_systemdetails():
+    specifications = db.session.query(Vehiclespecification).all()
+    systems = db.session.query(Vehiclesystemparts).all()
+    for specification in specifications:
+        make = db.session.query(Vehiclemake).join(Vehiclespecification).filter(Vehiclemake.id == specification.make_id).first()
+        model = db.session.query(Vehiclemodel).join(Vehiclespecification).filter(Vehiclemodel.id == specification.model_id).first()
+        print ("Fetching vehicle system details for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description)
+        url = "https://partsouq.com"+specification.path_to_partscatalog 
         while True:
             try:
-                print("Connecting to " + vehiclepart_system.url)
-                page = requests.get(vehiclepart_system.url)
+                print("Connecting to " + url)
+                page = requests.get(url)
             except requests.exceptions.ConnectionError:           
                 continue
             except requests.exceptions.ChunkedEncodingError:
                 continue
             break
-        soup = BeautifulSoup(page.content, 'html.parser')
-        parent_class = stringoperation(vehiclepart_system.class_element)
-        for table_row in soup.select('tr[class*="'+parent_class+'"]'):
-            table_col = table_row.find('td')
-
-            try:
-                #1st level subsystem
-                subsystem = table_col.text.strip()
-                path_to_parts = table_col.find("a")['href']
-                system_id = vehiclepart_system.id
-            except:
-                #if 2nd level sub-system exists
-                vehiclesubsystem = Vehiclesubsystem(subsystem=table_col.text.strip(), path_to_parts=None, system_id=vehiclepart_system.id, class_element=stringoperation(table_row['class'][0]), make_id=make.id, model_id=model.id, specification_id=specification.id)
-
-                db.session.add(vehiclesubsystem)
-                db.session.commit()
-
-                # vehicle_2ndlevel_subsystem(vehiclesystem_id, vehiclesubsystem.id, stringoperation(table_row['class'][0]), make_id, model_id, soup)
-                
-            else:
-                vehiclesubsystem = Vehiclesubsystem(subsystem=subsystem, path_to_parts=path_to_parts, system_id=system_id, make_id=make.id, model_id=model.id, specification_id=specification.id)
-
-                db.session.add(vehiclesubsystem)
-                db.session.commit()
-
-                print("Subsytem - " + subsystem + " posted to DB")
-                vehicle_part(make.id, model.id, path_to_parts, vehiclepart_system.id, vehiclesubsystem.id, None, None, specification.id)
-        time.sleep(3)
-    subsystems = db.session.query(Vehiclesubsystem).all()
-    print(str(len(subsystems)) + " sub systems posted to DB")
-    vehicle_2ndlevel_subsystem()
-
-
-
-@manager.command
-def vehicle_2ndlevel_subsystem():
-    vehiclepart_subsystems = db.session.query(Vehiclesubsystem).all()
-    for vehiclepart_subsystem in vehiclepart_subsystems:
-        make = db.session.query(Vehiclemake).join(Vehiclesubsystem).filter(Vehiclemake.id == vehiclepart_subsystem.make_id).first()
-        model = db.session.query(Vehiclemodel).join(Vehiclesubsystem).filter(Vehiclemodel.id == vehiclepart_subsystem.model_id).first()
-        vehiclesystem = db.session.query(Vehiclesystem).join(Vehiclesubsystem).filter(Vehiclesystem.id == vehiclepart_subsystem.system_id).first()
-        specification = db.session.query(Vehiclespecification).join(Vehiclesubsystem).filter(Vehiclespecification.id == vehiclepart_subsystem.specification_id).first()
         
-        if vehiclepart_subsystem.class_element:
-            
-            while True:
-                try:
-                    print("Connecting to " + url)
-                    page = requests.get(vehiclepart_subsystem.url)
-                except requests.exceptions.ConnectionError:           
-                    continue
-                except requests.exceptions.ChunkedEncodingError:
-                    continue
+        soup = BeautifulSoup(page.content, 'html.parser')
+        a = 0
+        for system in systems:
+            if a >= 1: 
                 break
-            soup = BeautifulSoup(page.content, 'html.parser')
-            parent_class = vehiclepart_subsystem.class_element
+            a += 1        
+            parent_class = stringoperation(system.class_element)
             for table_row in soup.select('tr[class*="'+parent_class+'"]'):
                 table_col = table_row.find('td')
 
                 try:
-                    #2nd level subsystem
-                    secondlevel_subsystem = table_col.text.strip()
+                    subsystem = table_col.text.strip()
                     path_to_parts = table_col.find("a")['href']
-                    subsystem_id = vehiclepart_subsystem.id
-                    system_id = vehiclesystem.id
-                except:
-                    #if 3rd level sub-system exists
-                    vehiclesecondlevelsubsystem = Vehiclesecondlevelsubsystem(secondlevel_subsystem=table_col.text.strip(), subsystem_id=vehiclepart_subsystem.id, system_id=vehiclesystem.id, make_id=make.id, model_id=model.id, class_element=stringoperation(table_row['class'][0]), url=vehiclepart_subsystem.url, specification_id=specification.id)
+                    system_id = system.id
 
-                    db.session.add(vehiclesecondlevelsubsystem)
+                    vehiclesystemdetails = Vehiclesystemdetails(system_id=system_id, subsystem=subsystem, path_to_parts=path_to_parts, specification_id=specification.id)
+                    db.session.add(vehiclesystemdetails)
                     db.session.commit()
+
+                    print("System details for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description + " added")
+                except TypeError:
+                    class_element=stringoperation(table_row['class'][0]),
                     
-                    # print("3rd level subsystem exists")
-                else:
-                    vehiclesecondlevelsubsystem = Vehiclesecondlevelsubsystem(secondlevel_subsystem=secondlevel_subsystem, path_to_parts=path_to_parts, subsystem_id=subsystem_id, system_id=system_id, make_id=make.id, model_id=model.id, url=vehiclepart_subsystem.url, specification_id=specification.id)
+                    for cols in soup.select('tr[class*="'+class_element[0]+'"]'):
+                        anchor = cols.find('a')
+                        if anchor:
+                            subsystem = anchor.text.strip()
+                            path_to_parts = anchor['href']
+                            vehiclesystemdetails = Vehiclesystemdetails(system_id=system_id, subsystem=subsystem, path_to_parts=path_to_parts, specification_id=specification.id)
+                            db.session.add(vehiclesystemdetails)
+                            db.session.commit()
 
-                    db.session.add(vehiclesecondlevelsubsystem)
-                    db.session.commit()
-
-                    print("2nd level sub system - " + secondlevel_subsystem + " added")
-
-                    vehicle_part(make.id, model.id, path_to_parts, vehiclesystem.id, vehiclepart_subsystem.id, vehiclesecondlevelsubsystem.id, None, specification.id)
+                            print("System details for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description + " added")
         time.sleep(3)
-    secondlevel_subsystems = db.session.query(Vehiclesecondlevelsubsystem).all()
-    print(str(len(secondlevel_subsystems)) + " 2nd level sub systems posted in DB")
-    vehicle_3rdlevel_subsystem()            
-
-
-@manager.command
-def vehicle_3rdlevel_subsystem():
-    secondlevel_subsystems = db.session.query(Vehiclesecondlevelsubsystem).all()
-
-    for secondlevel_subsystem in secondlevel_subsystems:
-        make = db.session.query(Vehiclemake).join(Vehiclesecondlevelsubsystem).filter(Vehiclemake.id == secondlevel_subsystem.make_id).first()
-        model = db.session.query(Vehiclemodel).join(Vehiclesecondlevelsubsystem).filter(Vehiclemodel.id == secondlevel_subsystem.model_id).first()
-        vehiclesystem = db.session.query(Vehiclesystem).join(Vehiclesecondlevelsubsystem).filter(Vehiclesystem.id == secondlevel_subsystem.system_id).first()
-        vehicle_subsystem = db.session.query(Vehiclesubsystem).join(Vehiclesecondlevelsubsystem).filter(Vehiclesubsystem.id == secondlevel_subsystem.subsystem_id).first()
-        specification = db.session.query(Vehiclespecification).join(Vehiclesecondlevelsubsystem).filter(Vehiclespecification.id == secondlevel_subsystem.specification_id).first()
-        
-        if secondlevel_subsystem.class_element:
-            
-            while True:
-                try:
-                    print("Connecting to " + secondlevel_subsystem.url)
-                    page = requests.get(secondlevel_subsystem.url)
-                except requests.exceptions.ConnectionError:           
-                    continue
-                except requests.exceptions.ChunkedEncodingError:
-                    continue
-                break
-            soup = BeautifulSoup(page.content, 'html.parser')
-            for table_row in soup.select('tr[class*="'+secondlevel_subsystem.class_element+'"]'):
-
-                table_col = table_row.find('td')
-                try:
-                    #3rd level subsystem
-                    thirdlevel_subsystem = table_col.text.strip()
-                    path_to_parts = table_col.find("a")['href']
-                    subsystem_id = vehicle_subsystem.id
-                    system_id = vehiclesystem.id
-                    secondlevel_subsystem_id = secondlevel_subsystem.id
-                except:
-                    #if 4th lvel subsystem exists
-                    print("4th level subsystem exists")
-                else:
-                    # print(thirdlevel_subsystem, path_to_parts, subsystem_id, system_id, secondlevel_subsystem_id)
-
-                    vehicle3rdlevelsubsystem = Vehicle3rdlevelsubsystem(thirdlevel_subsystem=thirdlevel_subsystem, path_to_parts=path_to_parts, subsystem_id=subsystem_id, system_id=system_id, secondlevel_subsystem_id=secondlevel_subsystem_id, specification_id=specification.id)
-
-                    db.session.add(vehicle3rdlevelsubsystem)
-                    db.session.commit()
-
-                    print("3rd level " +thirdlevel_subsystem +" added")
-
-                    vehicle_part(make.id, model.id, path_to_parts, vehiclesystem.id, vehicle_subsystem.id, secondlevel_subsystem.id, vehicle3rdlevelsubsystem.id, specification.id)
-
-
-@manager.command
-def vehicle_part(make_id, model_id, path_to_parts, vehiclesystem_id, vehiclesubsystem_id, vehiclesecondlevelsubsystem_id, vehicle3rdlevelsubsystem_id, specification_id):
-    url = "https://partsouq.com"+path_to_parts
+        print("Waiting for 5 secs before proceeding...")
     
-    while True:
-        try:
-            print("Connecting to " + url)
-            page = requests.get(url)
-        except requests.exceptions.ConnectionError:           
-            continue
-        except requests.exceptions.ChunkedEncodingError:
-            continue
-        break
-    soup = BeautifulSoup(page.content, 'html.parser')
-    part_category = soup.find_all("div", class_='col-lg-12')[1]
-    part_subcategory = soup.find("div", class_='col-xs-8 unit-header')
-    table = soup.find('table', class_='glow pop-vin table table-bordered-1 table-hover table-condensed')
-    rows = table.findAll('tr')
-    headers = []
-    records = []
-    links = []
-    for row in rows:
-        ths = row.find_all('th')
-        for th in ths:
-            if th:
-                headers.append(th.text.strip())
-        cols = row.find_all('td')
-        anchor = row.find("a")
-        if anchor:
-            links.append(anchor['href'])
-        _rows = [ele.text.strip() for ele in cols]
-        records.append(_rows)
+    systemdetails = db.session.query(Vehiclesystemdetails).all()
+    print(str(len(systemdetails)) + " system details posted to DB")
+    vehicle_parts()
+  
 
-    links = list(filter(None, links)) #Get rid of empty lists
-    headers = list(filter(None, headers)) #Get rid of empty lists
-    records = list(filter(None, records)) #Get rid of empty lists
+@manager.command
+def vehicle_parts():
+    systemdetails = db.session.query(Vehiclesystemdetails).all()
+    
+    for systemdetail in systemdetails:
+        specification = db.session.query(Vehiclespecification).join(Vehiclesystemdetails).filter(Vehiclespecification.id == systemdetail.specification_id).first()
 
+        make = db.session.query(Vehiclemake).join(Vehiclespecification).filter(Vehiclemake.id == specification.make_id).first()
 
-    for record, link in zip(records, links):
-        number_index = [idx for idx, element in enumerate(headers) if element == "Number"]
+        model = db.session.query(Vehiclemodel).join(Vehiclespecification).filter(Vehiclemodel.id == specification.model_id).first()
 
-        name_index = [idx for idx, element in enumerate(headers) if element == "Name"]
+        system = db.session.query(Vehiclesystemparts).join(Vehiclesystemdetails).filter(Vehiclesystemparts.id == Vehiclesystemdetails.system_id).first()
 
-        code_index = [idx for idx, element in enumerate(headers) if element ==
-        "Code"]
+        print ("Fetching " + system.system + " - " + systemdetail.subsystem  + " for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description + " " + specification.year)
+        
+        url = "https://partsouq.com"+systemdetail.path_to_parts
+    
+        while True:
+            try:
+                print("Connecting to " + url)
+                page = requests.get(url)
+            except requests.exceptions.ConnectionError:           
+                continue
+            except requests.exceptions.ChunkedEncodingError:
+                continue
+            break
 
-        qty_required_index = [idx for idx, element in enumerate(headers) if element ==
-        "Qty Required"]
+        soup = BeautifulSoup(page.content, 'html.parser')
+        part_category = soup.find_all("div", class_='col-lg-12')[1]
+        part_subcategory = soup.find("div", class_='col-xs-8 unit-header')
+        table = soup.find('table', class_='glow pop-vin table table-bordered-1 table-hover table-condensed')
+        rows = table.findAll('tr')
+        headers = []
+        records = []
+        links = []
+        for row in rows:
+            ths = row.find_all('th')
+            for th in ths:
+                if th:
+                    headers.append(th.text.strip())
+            cols = row.find_all('td')
+            anchor = row.find("a")
+            if anchor:
+                links.append(anchor['href'])
+            _rows = [ele.text.strip() for ele in cols]
+            records.append(_rows)
 
-        note_index = [idx for idx, element in enumerate(headers) if element ==
-        "Note"]
+        links = list(filter(None, links)) #Get rid of empty lists
+        headers = list(filter(None, headers)) #Get rid of empty lists
+        records = list(filter(None, records)) #Get rid of empty lists
 
-        manufacturer_note_index = [idx for idx, element in enumerate(headers) if element ==
-        "Manufacturer_note"]
+        
+        for record, link in zip(records, links):
+            number_index = [idx for idx, element in enumerate(headers) if element == "Number"]
 
-        end_of_production_index = [idx for idx, element in enumerate(headers) if element ==
-        "End_of_production"]
+            name_index = [idx for idx, element in enumerate(headers) if element == "Name"]
 
-        comment1_index = [idx for idx, element in enumerate(headers) if element ==
-        "Comment1"]
+            code_index = [idx for idx, element in enumerate(headers) if element ==
+            "Code"]
 
-        associated_parts_index = [idx for idx, element in enumerate(headers) if element ==
-        "Associated_parts"]
+            qty_required_index = [idx for idx, element in enumerate(headers) if element ==
+            "Qty Required"]
 
-        if number_index:
-            for _number_index in number_index:
-                number_index = int(_number_index)
-                try:
-                    number = record[number_index]
-                except:
-                    number = ""
-        else:
-            number = ""
+            note_index = [idx for idx, element in enumerate(headers) if element ==
+            "Note"]
 
-        if name_index:
-            for _name_index in name_index:
-                name_index = int(_name_index)
-                try:
-                    name = record[name_index]
-                except:
-                    name_index = ""
-        else:
-            name_index = ""
+            manufacturer_note_index = [idx for idx, element in enumerate(headers) if element ==
+            "Manufacturer_note"]
 
-        if code_index:
-            for _code_index in code_index:
-                code_index = int(_code_index)
-                try:
-                    code = record[code_index]
-                except:
-                    code = ""
-        else:
-            code = ""
+            end_of_production_index = [idx for idx, element in enumerate(headers) if element ==
+            "End_of_production"]
 
-        if qty_required_index:
-            for _qty_required_index in qty_required_index:
-                qty_required_index = int(_qty_required_index)
-                try:
-                    qty_required = record[qty_required_index]
-                except:
-                    qty_required = ""
-        else:
-            qty_required = ""
+            comment1_index = [idx for idx, element in enumerate(headers) if element ==
+            "Comment1"]
 
-        if note_index:
-            for _note_index in note_index:
-                note_index = int(_note_index)
-                try:
-                    note = record[note_index]
-                except:
-                    note = ""
-        else:
-            note = ""
+            associated_parts_index = [idx for idx, element in enumerate(headers) if element ==
+            "Associated_parts"]
 
-        if manufacturer_note_index:
-            for _manufacturer_note_index in manufacturer_note_index:
-                manufacturer_note_index = int(_manufacturer_note_index)
-                try:
-                    manufacturer_note = record[manufacturer_note_index]
-                except:
-                    manufacturer_note = ""
-        else:
-            manufacturer_note = ""
+            if number_index:
+                for _number_index in number_index:
+                    number_index = int(_number_index)
+                    try:
+                        number = record[number_index]
+                    except:
+                        number = ""
+            else:
+                number = ""
 
-        if end_of_production_index:
-            for _end_of_production_index in end_of_production_index:
-                end_of_production_index = int(_end_of_production_index)
-                try:
-                    end_of_production = record[end_of_production_index]
-                except:
-                    end_of_production = ""
+            if name_index:
+                for _name_index in name_index:
+                    name_index = int(_name_index)
+                    try:
+                        name = record[name_index]
+                    except:
+                        name_index = ""
+            else:
+                name_index = ""
 
-        else:
-            end_of_production = ""
+            if code_index:
+                for _code_index in code_index:
+                    code_index = int(_code_index)
+                    try:
+                        code = record[code_index]
+                    except:
+                        code = ""
+            else:
+                code = ""
 
-        if comment1_index:
-            for _comment1_index in comment1_index:
-                comment1_index = int(_comment1_index)
-                try:
-                    comment1 = record[comment1_index]
-                except:
-                    comment1 = ""
+            if qty_required_index:
+                for _qty_required_index in qty_required_index:
+                    qty_required_index = int(_qty_required_index)
+                    try:
+                        qty_required = record[qty_required_index]
+                    except:
+                        qty_required = ""
+            else:
+                qty_required = ""
 
-        else:
-            comment1 = ""
+            if note_index:
+                for _note_index in note_index:
+                    note_index = int(_note_index)
+                    try:
+                        note = record[note_index]
+                    except:
+                        note = ""
+            else:
+                note = ""
 
-        if associated_parts_index:
-            for _associated_parts_index in associated_parts_index:
-                associated_parts_index = int(_associated_parts_index)
-                try:
-                    associated_parts = record[associated_parts_index]
-                except:
-                    associated_parts = ""
+            if manufacturer_note_index:
+                for _manufacturer_note_index in manufacturer_note_index:
+                    manufacturer_note_index = int(_manufacturer_note_index)
+                    try:
+                        manufacturer_note = record[manufacturer_note_index]
+                    except:
+                        manufacturer_note = ""
+            else:
+                manufacturer_note = ""
 
-        else:
-            associated_parts = ""
+            if end_of_production_index:
+                for _end_of_production_index in end_of_production_index:
+                    end_of_production_index = int(_end_of_production_index)
+                    try:
+                        end_of_production = record[end_of_production_index]
+                    except:
+                        end_of_production = ""
 
-        vehiclepart = Vehiclepart(part_category=part_category.text.strip(), part_subcategory=part_subcategory.text.strip(), part_number=number, part_name=name, part_code=code, qty_required=qty_required, note=note, manufacturer_note=manufacturer_note, end_of_production=end_of_production, comment=comment1, associated_parts=associated_parts, path_to_cost=link, system_id=vehiclesystem_id, subsystem_id=vehiclesubsystem_id, secondlevel_subsystem_id=vehiclesecondlevelsubsystem_id, thirdlevel_subsystem_id=vehicle3rdlevelsubsystem_id, model_id=model_id, make_id=make_id, specification_id=specification_id)
+            else:
+                end_of_production = ""
 
-        db.session.add(vehiclepart)
-        db.session.commit()
+            if comment1_index:
+                for _comment1_index in comment1_index:
+                    comment1_index = int(_comment1_index)
+                    try:
+                        comment1 = record[comment1_index]
+                    except:
+                        comment1 = ""
+
+            else:
+                comment1 = ""
+
+            if associated_parts_index:
+                for _associated_parts_index in associated_parts_index:
+                    associated_parts_index = int(_associated_parts_index)
+                    try:
+                        associated_parts = record[associated_parts_index]
+                    except:
+                        associated_parts = ""
+
+            else:
+                associated_parts = ""
+
+            vehiclepart = Vehiclepart(part_category=part_category.text.strip(), part_subcategory=part_subcategory.text.strip(), part_number=number, part_name=name, part_code=code, qty_required=qty_required, note=note, manufacturer_note=manufacturer_note, end_of_production=end_of_production, comment=comment1, associated_parts=associated_parts, path_to_cost=link, specification_id=specification.id)
+
+            db.session.add(vehiclepart)
+            db.session.commit()
+
+            print (system.system + " - " + systemdetail.subsystem  + " for " + make.name + " " + model.name + " " + specification.name + " " + specification.model + " " + specification.series_description + " " + specification.year + " posted to DB")
+
+        print("Waiting for 5 secs before proceeding...")
+        time.sleep(3)
+    
+    systemdetails = db.session.query(Vehiclesystemdetails).all()
+    print(str(len(systemdetails)) + " parts posted to DB")
+
 
 if __name__ == "__main__":
     manager.run()
